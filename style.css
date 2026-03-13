@@ -8,10 +8,36 @@ body {
 }
 
 .container {
-    position: relative;
     width: 100%;
     max-width: 800px;
     margin: 20px auto;
+    padding: 20px;
+}
+
+#startBtn {
+    padding: 12px 30px;
+    font-size: 1.2rem;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    margin: 20px 0;
+}
+
+#startBtn:hover {
+    background: #45a049;
+}
+
+#startBtn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+.video-wrapper {
+    position: relative;
+    width: 100%;
+    margin-top: 20px;
 }
 
 video, canvas {
@@ -30,7 +56,7 @@ h1 {
     text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
 }
 
-p {
+#status {
     margin-top: 20px;
     font-size: 0.9rem;
     color: #ccc;
