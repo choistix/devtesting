@@ -8,27 +8,27 @@ const videoWrapper = document.querySelector('.video-wrapper');
 const statusEl = document.getElementById('status');
 
 let faceDetector;
-let camera = null;
+let lastVideoTime = -1;
 
-// Initialize MediaPipe Face Detection
+// Initialize MediaPipe Face Detector
 async function initDetector() {
     statusEl.textContent = 'Loading face detection model...';
     try {
-        faceDetector = new faceDetection.FaceDetector({
-            locateFile: (file) => {
-                return `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection@0.4.1646425229/${file}`;
+        // Ensure the Vision library is loaded
+        const vision = await window.FilesetResolver.forVisionTasks(
+            'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm'
+        );
+        faceDetector = await vision.createFaceDetector(
+            vision,
+            {
+                baseOptions: {
+                    modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite',
+                    delegate: 'CPU'
+                },
+                runningMode: 'VIDEO',
+                minDetectionConfidence: 0.5
             }
-        });
-
-        // Set detection options
-        faceDetector.setOptions({
-            modelSelection: 0, // 0 for short-range, 1 for full-range
-            minDetectionConfidence: 0.5
-        });
-
-        // Pass the video feed and receive detections
-        faceDetector.onResults(onResults);
-
+        );
         statusEl.textContent = '✅ Model loaded. Click "Start Camera" to begin.';
     } catch (err) {
         console.error('Failed to load face detector:', err);
@@ -36,61 +36,29 @@ async function initDetector() {
     }
 }
 
-// Callback when face detection results are ready
-function onResults(results) {
-    // Clear canvas and draw the video frame
-    ctx.save();
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-
-    if (results.detections && results.detections.length > 0) {
-        results.detections.forEach(detection => {
-            // MediaPipe returns normalized bounding box [x, y, width, height]
-            const bbox = detection.boundingBox;
-            const x = bbox.xMin * canvas.width;
-            const y = bbox.yMin * canvas.height;
-            const width = (bbox.xMax - bbox.xMin) * canvas.width;
-            const height = (bbox.yMax - bbox.yMin) * canvas.height;
-
-            // Draw emoji
-            const emoji = '😊';
-            const fontSize = height * 0.8;
-            ctx.font = `${fontSize}px 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'EmojiOne Color', sans-serif`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(emoji, x + width / 2, y + height / 2);
-        });
-    }
-    ctx.restore();
-}
-
-// Start camera and connect to MediaPipe
+// Start webcam and detection loop
 async function startCamera() {
     try {
         statusEl.textContent = 'Requesting camera access...';
-        
-        // Set up camera
-        camera = new Camera(video, {
-            onFrame: async () => {
-                await faceDetector.send({ image: video });
-            },
-            width: 640,
-            height: 480
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                width: { ideal: 640 },
+                height: { ideal: 480 }
+            }
         });
-
-        // Start camera stream
-        await camera.start();
-
-        // Set canvas dimensions to match video
-        video.addEventListener('loadedmetadata', () => {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-        });
-
-        // Show video wrapper and hide start button
+        video.srcObject = stream;
         videoWrapper.style.display = 'block';
         startBtn.style.display = 'none';
         statusEl.textContent = 'Camera started. Detecting faces...';
+
+        // Wait for video metadata to set canvas size
+        video.addEventListener('loadedmetadata', () => {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            // Start detection loop once video is playing
+            video.play();
+            detectLoop();
+        });
     } catch (err) {
         console.error('Error starting camera:', err);
         if (err.name === 'NotAllowedError') {
@@ -101,6 +69,47 @@ async function startCamera() {
             statusEl.textContent = '❌ Error accessing camera. Check console.';
         }
     }
+}
+
+// Detection loop using requestAnimationFrame
+async function detectLoop() {
+    if (!faceDetector || video.paused || video.ended) {
+        requestAnimationFrame(detectLoop);
+        return;
+    }
+
+    try {
+        // Only run detection if video time has changed (to avoid duplicate processing)
+        if (video.currentTime !== lastVideoTime) {
+            lastVideoTime = video.currentTime;
+            const detections = faceDetector.detectForVideo(video, performance.now());
+
+            // Draw video frame onto canvas
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Draw emoji on each detected face
+            if (detections.detections && detections.detections.length > 0) {
+                detections.detections.forEach(detection => {
+                    const bbox = detection.boundingBox;
+                    const x = bbox.originX * canvas.width;
+                    const y = bbox.originY * canvas.height;
+                    const width = bbox.width * canvas.width;
+                    const height = bbox.height * canvas.height;
+
+                    const emoji = '😊';
+                    const fontSize = height * 0.8;
+                    ctx.font = `${fontSize}px 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'EmojiOne Color', sans-serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(emoji, x + width / 2, y + height / 2);
+                });
+            }
+        }
+    } catch (err) {
+        console.error('Detection error:', err);
+    }
+
+    requestAnimationFrame(detectLoop);
 }
 
 // Event listener for start button
