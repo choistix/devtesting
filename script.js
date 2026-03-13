@@ -11,42 +11,33 @@ const statusEl = document.getElementById('status');
 let modelsLoaded = false;
 let modelsLoading = false;
 
-// List of model URLs to try (in order)
-const MODEL_URLS = [
-    'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js-models@master/models',
-    'https://unpkg.com/face-api.js-models@0.0.1/models',
-    'https://raw.githubusercontent.com/justadudewhohacks/face-api.js-models/master/models'
-];
+// Use local models folder (relative path)
+const MODEL_URL = 'models/';  // Points to /models/ in your repo
 
-async function loadModels(urlIndex = 0) {
+async function loadModels() {
     if (modelsLoading) return;
-    if (urlIndex >= MODEL_URLS.length) {
-        statusEl.innerHTML = '❌ Failed to load face detection models from all sources. ' +
-                             'Please check your internet connection and <a href="#" id="retryLink">retry</a>.';
-        document.getElementById('retryLink')?.addEventListener('click', (e) => {
-            e.preventDefault();
-            loadModels(0);
-        });
-        retryBtn.style.display = 'inline-block';
-        return;
-    }
-
     modelsLoading = true;
-    statusEl.textContent = `Loading models (attempt ${urlIndex + 1}/${MODEL_URLS.length})...`;
-    
+    statusEl.textContent = 'Loading face detection models...';
+
     try {
-        const MODEL_URL = MODEL_URLS[urlIndex];
         await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-        
         modelsLoaded = true;
         statusEl.textContent = '✅ Models loaded. Click "Start Camera" to begin.';
         startBtn.disabled = false;
         retryBtn.style.display = 'none';
     } catch (err) {
-        console.warn(`Failed to load from ${MODEL_URLS[urlIndex]}:`, err);
-        // Try next URL
+        console.error('Failed to load models:', err);
+        statusEl.innerHTML = '❌ Failed to load face detection models. ' +
+                             'Make sure the model files are in the "models" folder. ' +
+                             '<button id="retryBtn">Retry</button>';
+        document.getElementById('retryBtn')?.addEventListener('click', () => {
+            modelsLoaded = false;
+            modelsLoading = false;
+            loadModels();
+        });
+        retryBtn.style.display = 'inline-block';
+    } finally {
         modelsLoading = false;
-        loadModels(urlIndex + 1);
     }
 }
 
@@ -133,8 +124,8 @@ startBtn.addEventListener('click', () => {
 retryBtn.addEventListener('click', () => {
     modelsLoaded = false;
     modelsLoading = false;
-    loadModels(0);
+    loadModels();
 });
 
 // Start loading models
-loadModels(0);
+loadModels();
