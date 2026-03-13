@@ -3,25 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Face Emoji Overlay (TensorFlow.js)</title>
+    <title>Face Emoji Overlay (MediaPipe)</title>
     <link rel="stylesheet" href="style.css">
-    <!-- Load TensorFlow.js and the face detection model -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-detection"></script>
+    <!-- Load MediaPipe Face Detection -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection@0.4.1646425229/face_detection.js"></script>
+    <!-- Load Camera utilities -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1646425229/camera_utils.js"></script>
 </head>
 <body>
     <div class="container">
         <h1>Face Emoji Overlay</h1>
-        <button id="startBtn" disabled>Start Camera</button>
+        <button id="startBtn">Start Camera</button>
         <div class="video-wrapper" style="display: none;">
             <video id="video" autoplay muted playsinline></video>
             <canvas id="overlay"></canvas>
         </div>
-        <p id="status">Loading face detection model...</p>
+        <p id="status">Click "Start Camera" to begin.</p>
     </div>
 
-    <!-- Our script -->
     <script src="script.js"></script>
 </body>
 </html>

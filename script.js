@@ -7,63 +7,92 @@ const ctx = canvas.getContext('2d');
 const videoWrapper = document.querySelector('.video-wrapper');
 const statusEl = document.getElementById('status');
 
-let detector = null;
-let modelLoading = false;
+let faceDetector;
+let camera = null;
 
-// Initialize the face detector
+// Initialize MediaPipe Face Detection
 async function initDetector() {
-    if (modelLoading) return;
-    modelLoading = true;
     statusEl.textContent = 'Loading face detection model...';
-
     try {
-        // Use MediaPipe BlazeFace model (lightweight and fast)
-        const model = faceDetection.SupportedModels.MediaPipeFaceDetector;
-        const detectorConfig = {
-            runtime: 'tfjs', // Use TensorFlow.js backend
-            maxFaces: 10,
-        };
-        detector = await faceDetection.createDetector(model, detectorConfig);
-        
-        statusEl.textContent = '✅ Model loaded. Click "Start Camera" to begin.';
-        startBtn.disabled = false;
-    } catch (err) {
-        console.error('Failed to load model:', err);
-        statusEl.innerHTML = '❌ Failed to load face detection model. ' +
-                             'Please check your internet connection and <button id="retryBtn">retry</button>.';
-        document.getElementById('retryBtn')?.addEventListener('click', () => {
-            modelLoading = false;
-            initDetector();
+        faceDetector = new faceDetection.FaceDetector({
+            locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection@0.4.1646425229/${file}`;
+            }
         });
-    } finally {
-        modelLoading = false;
+
+        // Set detection options
+        faceDetector.setOptions({
+            modelSelection: 0, // 0 for short-range, 1 for full-range
+            minDetectionConfidence: 0.5
+        });
+
+        // Pass the video feed and receive detections
+        faceDetector.onResults(onResults);
+
+        statusEl.textContent = '✅ Model loaded. Click "Start Camera" to begin.';
+    } catch (err) {
+        console.error('Failed to load face detector:', err);
+        statusEl.textContent = '❌ Failed to load model. Please refresh and try again.';
     }
 }
 
-// Start webcam stream
-async function startVideo() {
+// Callback when face detection results are ready
+function onResults(results) {
+    // Clear canvas and draw the video frame
+    ctx.save();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+
+    if (results.detections && results.detections.length > 0) {
+        results.detections.forEach(detection => {
+            // MediaPipe returns normalized bounding box [x, y, width, height]
+            const bbox = detection.boundingBox;
+            const x = bbox.xMin * canvas.width;
+            const y = bbox.yMin * canvas.height;
+            const width = (bbox.xMax - bbox.xMin) * canvas.width;
+            const height = (bbox.yMax - bbox.yMin) * canvas.height;
+
+            // Draw emoji
+            const emoji = '😊';
+            const fontSize = height * 0.8;
+            ctx.font = `${fontSize}px 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'EmojiOne Color', sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(emoji, x + width / 2, y + height / 2);
+        });
+    }
+    ctx.restore();
+}
+
+// Start camera and connect to MediaPipe
+async function startCamera() {
     try {
         statusEl.textContent = 'Requesting camera access...';
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { 
-                width: { ideal: 640 },
-                height: { ideal: 480 }
-            } 
-        });
-        video.srcObject = stream;
-        statusEl.textContent = 'Camera started. Detecting faces...';
         
-        videoWrapper.style.display = 'block';
-        startBtn.style.display = 'none';
+        // Set up camera
+        camera = new Camera(video, {
+            onFrame: async () => {
+                await faceDetector.send({ image: video });
+            },
+            width: 640,
+            height: 480
+        });
 
+        // Start camera stream
+        await camera.start();
+
+        // Set canvas dimensions to match video
         video.addEventListener('loadedmetadata', () => {
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
         });
 
-        video.addEventListener('play', detectFaces);
+        // Show video wrapper and hide start button
+        videoWrapper.style.display = 'block';
+        startBtn.style.display = 'none';
+        statusEl.textContent = 'Camera started. Detecting faces...';
     } catch (err) {
-        console.error('Error accessing webcam:', err);
+        console.error('Error starting camera:', err);
         if (err.name === 'NotAllowedError') {
             statusEl.textContent = '❌ Camera access denied. Please allow access and try again.';
         } else if (err.name === 'NotFoundError') {
@@ -74,48 +103,14 @@ async function startVideo() {
     }
 }
 
-// Detection loop
-async function detectFaces() {
-    if (!detector || video.paused || video.ended) return;
-
-    try {
-        // Ensure canvas dimensions match video
-        if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-        }
-
-        // Detect faces
-        const faces = await detector.estimateFaces(video);
-
-        // Draw video frame onto canvas
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        // Draw emoji on each face
-        faces.forEach(face => {
-            // The bounding box is in [x1, y1, x2, y2] format
-            const box = face.box;
-            const x = box.xMin;
-            const y = box.yMin;
-            const width = box.xMax - box.xMin;
-            const height = box.yMax - box.yMin;
-
-            const emoji = '😊';
-            const fontSize = height * 0.8;
-            ctx.font = `${fontSize}px 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'EmojiOne Color', sans-serif`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(emoji, x + width / 2, y + height / 2);
-        });
-    } catch (err) {
-        console.error('Detection error:', err);
+// Event listener for start button
+startBtn.addEventListener('click', () => {
+    if (faceDetector) {
+        startCamera();
+    } else {
+        statusEl.textContent = 'Model still loading. Please wait...';
     }
+});
 
-    requestAnimationFrame(detectFaces);
-}
-
-// Event listeners
-startBtn.addEventListener('click', startVideo);
-
-// Start loading the model
+// Initialize detector when page loads
 initDetector();
