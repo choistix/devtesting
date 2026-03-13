@@ -9,12 +9,12 @@
 <body>
     <div class="container">
         <h1>Face Emoji Overlay</h1>
-        <button id="startBtn">Start Camera</button>
+        <button id="startBtn" disabled>Start Camera</button>
         <div class="video-wrapper" style="display: none;">
             <video id="video" autoplay muted playsinline></video>
             <canvas id="overlay"></canvas>
         </div>
-        <p id="status">Click "Start Camera" to begin.</p>
+        <p id="status">Loading face detection models...</p>
     </div>
 
     <!-- Load face-api.js from CDN -->

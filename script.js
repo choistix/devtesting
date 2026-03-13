@@ -8,21 +8,39 @@ const videoWrapper = document.querySelector('.video-wrapper');
 const statusEl = document.getElementById('status');
 
 let modelsLoaded = false;
+let modelsLoading = false;
 
 // Load face-api.js models
 async function loadModels() {
+    if (modelsLoading) return;
+    modelsLoading = true;
+    statusEl.textContent = 'Loading face detection models...';
+
     try {
-        statusEl.textContent = 'Loading face detection models...';
+        // Use a reliable CDN for the models
         const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js-models@master/models';
+        
+        // Load the tiny face detector (smallest and fastest)
         await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-        // Optionally load landmarks if you need better placement
-        // await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+        
         modelsLoaded = true;
-        statusEl.textContent = 'Models loaded. Click "Start Camera" to begin.';
-        startBtn.disabled = false;
+        statusEl.textContent = '✅ Models loaded. Click "Start Camera" to begin.';
+        startBtn.disabled = false;   // Enable the button
     } catch (err) {
         console.error('Failed to load models:', err);
-        statusEl.textContent = 'Error loading models. Check console.';
+        statusEl.innerHTML = '❌ Failed to load face detection models. ' +
+                             'Please check your internet connection and <button id="retryBtn">retry</button>.';
+        
+        // Add retry functionality
+        const retryBtn = document.getElementById('retryBtn');
+        if (retryBtn) {
+            retryBtn.addEventListener('click', () => {
+                modelsLoading = false;
+                loadModels();
+            });
+        }
+    } finally {
+        modelsLoading = false;
     }
 }
 
@@ -38,11 +56,12 @@ async function startVideo() {
         });
         video.srcObject = stream;
         statusEl.textContent = 'Camera started. Detecting faces...';
-        // Show video wrapper
+        
+        // Show video wrapper and hide start button
         videoWrapper.style.display = 'block';
-        startBtn.style.display = 'none'; // Hide start button once running
+        startBtn.style.display = 'none';
 
-        // Wait for video metadata to load to set canvas dimensions
+        // Wait for video metadata to set canvas dimensions
         video.addEventListener('loadedmetadata', () => {
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
@@ -53,11 +72,11 @@ async function startVideo() {
     } catch (err) {
         console.error('Error accessing webcam:', err);
         if (err.name === 'NotAllowedError') {
-            statusEl.textContent = 'Camera access denied. Please allow access and try again.';
+            statusEl.textContent = '❌ Camera access denied. Please allow access and try again.';
         } else if (err.name === 'NotFoundError') {
-            statusEl.textContent = 'No camera found. Please connect a webcam.';
+            statusEl.textContent = '❌ No camera found. Please connect a webcam.';
         } else {
-            statusEl.textContent = 'Error accessing camera. Check console.';
+            statusEl.textContent = '❌ Error accessing camera. Check console.';
         }
     }
 }
@@ -108,7 +127,7 @@ startBtn.addEventListener('click', () => {
     if (modelsLoaded) {
         startVideo();
     } else {
-        statusEl.textContent = 'Models not loaded yet. Please wait.';
+        statusEl.textContent = 'Models still loading. Please wait...';
     }
 });
 
