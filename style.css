@@ -14,7 +14,7 @@ body {
     padding: 20px;
 }
 
-#startBtn {
+#startBtn, #retryBtn {
     padding: 12px 30px;
     font-size: 1.2rem;
     background: #4CAF50;
@@ -22,10 +22,11 @@ body {
     border: none;
     border-radius: 5px;
     cursor: pointer;
-    margin: 20px 0;
+    margin: 10px;
 }
 
-#startBtn:hover:not(:disabled) {
+#startBtn:hover:not(:disabled),
+#retryBtn:hover {
     background: #45a049;
 }
 
@@ -33,6 +34,14 @@ body {
     background: #ccc;
     cursor: not-allowed;
     opacity: 0.6;
+}
+
+#retryBtn {
+    background: #f39c12;
+}
+
+#retryBtn:hover {
+    background: #e67e22;
 }
 
 .video-wrapper {

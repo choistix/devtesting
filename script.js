@@ -1,6 +1,7 @@
 // script.js
 
 const startBtn = document.getElementById('startBtn');
+const retryBtn = document.getElementById('retryBtn');
 const video = document.getElementById('video');
 const canvas = document.getElementById('overlay');
 const ctx = canvas.getContext('2d');
@@ -10,37 +11,42 @@ const statusEl = document.getElementById('status');
 let modelsLoaded = false;
 let modelsLoading = false;
 
-// Load face-api.js models
-async function loadModels() {
-    if (modelsLoading) return;
-    modelsLoading = true;
-    statusEl.textContent = 'Loading face detection models...';
+// List of model URLs to try (in order)
+const MODEL_URLS = [
+    'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js-models@master/models',
+    'https://unpkg.com/face-api.js-models@0.0.1/models',
+    'https://raw.githubusercontent.com/justadudewhohacks/face-api.js-models/master/models'
+];
 
+async function loadModels(urlIndex = 0) {
+    if (modelsLoading) return;
+    if (urlIndex >= MODEL_URLS.length) {
+        statusEl.innerHTML = '❌ Failed to load face detection models from all sources. ' +
+                             'Please check your internet connection and <a href="#" id="retryLink">retry</a>.';
+        document.getElementById('retryLink')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            loadModels(0);
+        });
+        retryBtn.style.display = 'inline-block';
+        return;
+    }
+
+    modelsLoading = true;
+    statusEl.textContent = `Loading models (attempt ${urlIndex + 1}/${MODEL_URLS.length})...`;
+    
     try {
-        // Use a reliable CDN for the models
-        const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js-models@master/models';
-        
-        // Load the tiny face detector (smallest and fastest)
+        const MODEL_URL = MODEL_URLS[urlIndex];
         await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
         
         modelsLoaded = true;
         statusEl.textContent = '✅ Models loaded. Click "Start Camera" to begin.';
-        startBtn.disabled = false;   // Enable the button
+        startBtn.disabled = false;
+        retryBtn.style.display = 'none';
     } catch (err) {
-        console.error('Failed to load models:', err);
-        statusEl.innerHTML = '❌ Failed to load face detection models. ' +
-                             'Please check your internet connection and <button id="retryBtn">retry</button>.';
-        
-        // Add retry functionality
-        const retryBtn = document.getElementById('retryBtn');
-        if (retryBtn) {
-            retryBtn.addEventListener('click', () => {
-                modelsLoading = false;
-                loadModels();
-            });
-        }
-    } finally {
+        console.warn(`Failed to load from ${MODEL_URLS[urlIndex]}:`, err);
+        // Try next URL
         modelsLoading = false;
+        loadModels(urlIndex + 1);
     }
 }
 
@@ -57,17 +63,15 @@ async function startVideo() {
         video.srcObject = stream;
         statusEl.textContent = 'Camera started. Detecting faces...';
         
-        // Show video wrapper and hide start button
         videoWrapper.style.display = 'block';
         startBtn.style.display = 'none';
+        retryBtn.style.display = 'none';
 
-        // Wait for video metadata to set canvas dimensions
         video.addEventListener('loadedmetadata', () => {
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
         });
 
-        // Start detection loop when video plays
         video.addEventListener('play', detectFaces);
     } catch (err) {
         console.error('Error accessing webcam:', err);
@@ -86,13 +90,11 @@ async function detectFaces() {
     if (!modelsLoaded || video.paused || video.ended) return;
 
     try {
-        // Ensure canvas dimensions match video (in case they changed)
         if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
         }
 
-        // Detect faces
         const detections = await faceapi.detectAllFaces(
             video,
             new faceapi.TinyFaceDetectorOptions({ 
@@ -101,10 +103,8 @@ async function detectFaces() {
             })
         );
 
-        // Draw video frame onto canvas
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-        // Draw emoji on each face
         detections.forEach(detection => {
             const { x, y, width, height } = detection.box;
             const emoji = '😊';
@@ -118,11 +118,10 @@ async function detectFaces() {
         console.error('Detection error:', err);
     }
 
-    // Continue loop
     requestAnimationFrame(detectFaces);
 }
 
-// Event listener for the start button
+// Event listeners
 startBtn.addEventListener('click', () => {
     if (modelsLoaded) {
         startVideo();
@@ -131,5 +130,11 @@ startBtn.addEventListener('click', () => {
     }
 });
 
-// Load models when page loads
-loadModels();
+retryBtn.addEventListener('click', () => {
+    modelsLoaded = false;
+    modelsLoading = false;
+    loadModels(0);
+});
+
+// Start loading models
+loadModels(0);
